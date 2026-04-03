@@ -1,0 +1,21 @@
+# Environment & secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Database (local only)
+secureflow.db
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# VSCode
+.vscode/
+
+# Claude memory
+.claude/
