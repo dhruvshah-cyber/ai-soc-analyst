@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incident Report #{{ alert.id }} — AI SOC Analyst</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark navbar-expand-lg soc-navbar">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+            <i class="bi bi-shield-shaded text-cyan"></i>
+            <span class="fw-bold">AI SOC Analyst</span>
+        </a>
+        <div class="d-flex align-items-center gap-3">
+            <a href="/" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+            </a>
+            <button class="btn btn-outline-cyan btn-sm" onclick="exportReportTxt()">
+                <i class="bi bi-download me-1"></i>Export Report
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+    <!-- Report Header -->
+    <div class="report-header mb-4">
+        <div class="d-flex align-items-center gap-3 mb-2">
+            <span class="report-id">INC-{{ '%05d' % alert.id }}</span>
+            <span class="severity-badge severity-{{ (alert.severity or 'low')|lower }}-badge">{{ alert.severity or 'UNKNOWN' }}</span>
+            {% if alert.classification == 'True Positive' %}
+                <span class="classification-pill tp-pill"><i class="bi bi-check-circle-fill me-1"></i>True Positive</span>
+            {% else %}
+                <span class="classification-pill fp-pill"><i class="bi bi-x-circle-fill me-1"></i>False Positive</span>
+            {% endif %}
+        </div>
+        <h4 class="text-white mb-1">Security Incident Report</h4>
+        <div class="text-muted small">
+            <i class="bi bi-clock me-1"></i>Analyzed: {{ alert.created_at }}
+            &nbsp;&nbsp;
+            <i class="bi bi-cpu me-1"></i>Engine: claude-sonnet-4-6
+            &nbsp;&nbsp;
+            <i class="bi bi-percent me-1"></i>Confidence: {{ alert.confidence }}%
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+
+            <!-- Raw Alert -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-terminal-fill text-cyan me-2"></i>Raw Alert / Log Input
+                </div>
+                <div class="soc-card-body">
+                    <pre class="raw-alert-text">{{ alert.alert_text }}</pre>
+                </div>
+            </div>
+
+            <!-- Threat Summary -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-file-text-fill text-cyan me-2"></i>Threat Summary
+                </div>
+                <div class="soc-card-body">
+                    <p class="mb-0">{{ alert.summary }}</p>
+                </div>
+            </div>
+
+            <!-- Containment Steps -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-shield-check-fill text-green me-2"></i>Containment Steps
+                </div>
+                <div class="soc-card-body">
+                    <ol class="containment-list">
+                        {% for step in alert.containment_steps %}
+                        <li>{{ step }}</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Full Incident Report -->
+            <div class="soc-card mb-4" id="full-report-section">
+                <div class="soc-card-header">
+                    <i class="bi bi-journal-richtext text-cyan me-2"></i>Full Incident Report
+                </div>
+                <div class="soc-card-body">
+                    <pre class="incident-report-text">{{ alert.incident_report }}</pre>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-lg-4">
+
+            <!-- Classification Card -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-speedometer2 text-cyan me-2"></i>Triage Result
+                </div>
+                <div class="soc-card-body text-center py-4">
+                    {% if alert.classification == 'True Positive' %}
+                        <div class="triage-icon tp-icon mb-3"><i class="bi bi-shield-exclamation"></i></div>
+                        <div class="fw-bold text-green fs-5 mb-1">True Positive</div>
+                    {% else %}
+                        <div class="triage-icon fp-icon mb-3"><i class="bi bi-shield-check"></i></div>
+                        <div class="fw-bold text-red fs-5 mb-1">False Positive</div>
+                    {% endif %}
+                    <div class="text-muted small mb-3">AI Classification</div>
+
+                    <!-- Confidence Gauge -->
+                    <div class="confidence-gauge">
+                        <div class="confidence-label">Confidence Score</div>
+                        <div class="confidence-value">{{ alert.confidence }}%</div>
+                        <div class="progress soc-progress mt-2">
+                            <div class="progress-bar {% if alert.confidence >= 80 %}bg-green{% elif alert.confidence >= 50 %}bg-yellow{% else %}bg-red{% endif %}"
+                                style="width: {{ alert.confidence }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Severity Card -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-exclamation-triangle-fill text-cyan me-2"></i>Severity Level
+                </div>
+                <div class="soc-card-body text-center py-3">
+                    <div class="severity-display severity-{{ (alert.severity or 'low')|lower }}-display">
+                        {{ alert.severity or 'Unknown' }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- MITRE Techniques -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-diagram-3-fill text-cyan me-2"></i>MITRE ATT&CK
+                </div>
+                <div class="soc-card-body">
+                    {% if alert.mitre_techniques %}
+                        {% for t in alert.mitre_techniques %}
+                        <div class="mitre-tag-block mb-2">
+                            <div class="mitre-id">{{ t.id }}</div>
+                            <div class="mitre-name">{{ t.name }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-muted small">No MITRE techniques identified.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="soc-card">
+                <div class="soc-card-header">
+                    <i class="bi bi-lightning-fill text-cyan me-2"></i>Quick Actions
+                </div>
+                <div class="soc-card-body d-grid gap-2">
+                    <button class="btn btn-outline-cyan btn-sm" onclick="exportReportTxt()">
+                        <i class="bi bi-file-text me-2"></i>Export as .txt
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="copyReport()">
+                        <i class="bi bi-clipboard me-2"></i>Copy to Clipboard
+                    </button>
+                    <a href="/" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-plus-circle me-2"></i>Analyze New Alert
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="soc-footer mt-5">
+    <div class="container-fluid px-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small"><i class="bi bi-shield-shaded me-1 text-cyan"></i>AI SOC Analyst — For authorized and educational use only.</span>
+            <span class="text-muted small">Built by <a href="https://github.com/dhruvshah-cyber" class="text-cyan text-decoration-none">Dhruv Shah</a></span>
+        </div>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const reportData = {
+        id: {{ alert.id }},
+        alert_text: {{ alert.alert_text | tojson }},
+        classification: {{ (alert.classification or '') | tojson }},
+        severity: {{ (alert.severity or '') | tojson }},
+        confidence: {{ alert.confidence or 0 }},
+        summary: {{ (alert.summary or '') | tojson }},
+        incident_report: {{ (alert.incident_report or '') | tojson }},
+        created_at: {{ (alert.created_at or '') | tojson }}
+    };
+
+    function exportReportTxt() {
+        const content = `AI SOC ANALYST — INCIDENT REPORT
+${'='.repeat(60)}
+Incident ID   : INC-${String(reportData.id).padStart(5, '0')}
+Classification: ${reportData.classification}
+Severity      : ${reportData.severity}
+Confidence    : ${reportData.confidence}%
+Analyzed At   : ${reportData.created_at}
+${'='.repeat(60)}
+
+RAW ALERT INPUT
+${'-'.repeat(60)}
+${reportData.alert_text}
+
+THREAT SUMMARY
+${'-'.repeat(60)}
+${reportData.summary}
+
+FULL INCIDENT REPORT
+${'-'.repeat(60)}
+${reportData.incident_report}
+
+${'='.repeat(60)}
+Generated by AI SOC Analyst (claude-sonnet-4-6)
+For authorized and educational use only.`;
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `incident-INC-${String(reportData.id).padStart(5, '0')}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function copyReport() {
+        const text = document.getElementById('full-report-section').querySelector('pre').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = event.target.closest('button');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check2 me-2"></i>Copied!';
+            setTimeout(() => btn.innerHTML = orig, 2000);
+        });
+    }
+</script>
+</body>
+</html>

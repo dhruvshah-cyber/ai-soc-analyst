@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI SOC Analyst — Security Operations Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark navbar-expand-lg soc-navbar">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+            <i class="bi bi-shield-shaded text-cyan"></i>
+            <span class="fw-bold">AI SOC Analyst</span>
+            <span class="badge badge-online ms-2">ONLINE</span>
+        </a>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-muted small"><i class="bi bi-clock me-1"></i><span id="live-clock"></span></span>
+            <span class="text-muted small"><i class="bi bi-cpu me-1"></i>claude-sonnet-4-6</span>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="container-fluid px-4 py-4">
+
+    <!-- Stats Row -->
+    <div class="row g-3 mb-4" id="stats-row">
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="bi bi-activity"></i></div>
+                <div class="stat-value" id="stat-total">{{ stats.total }}</div>
+                <div class="stat-label">Total Alerts</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon text-green"><i class="bi bi-check-circle-fill"></i></div>
+                <div class="stat-value text-green" id="stat-tp">{{ stats.true_positives }}</div>
+                <div class="stat-label">True Positives</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon text-red"><i class="bi bi-x-circle-fill"></i></div>
+                <div class="stat-value text-red" id="stat-fp">{{ stats.false_positives }}</div>
+                <div class="stat-label">False Positives</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon text-warning"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <div class="stat-value text-warning" id="stat-critical">{{ stats.severity_breakdown.Critical }}</div>
+                <div class="stat-label">Critical Severity</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- Left: Input + Results -->
+        <div class="col-lg-7">
+
+            <!-- Alert Input Panel -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-terminal-fill text-cyan me-2"></i>
+                    <span>Alert Triage Console</span>
+                    <span class="ms-auto badge badge-live">LIVE</span>
+                </div>
+                <div class="soc-card-body">
+                    <label class="form-label text-muted small mb-1">
+                        <i class="bi bi-clipboard-data me-1"></i>PASTE RAW ALERT / LOG SNIPPET
+                    </label>
+                    <textarea
+                        id="alert-input"
+                        class="form-control soc-textarea"
+                        rows="9"
+                        placeholder="Paste your raw security alert, SIEM log, firewall event, or any suspicious log snippet here...
+
+Example:
+Jan 15 03:42:11 webserver sshd[1234]: Failed password for root from 192.168.1.105 port 52341 ssh2
+Jan 15 03:42:12 webserver sshd[1234]: Failed password for root from 192.168.1.105 port 52342 ssh2
+..."
+                    ></textarea>
+                    <div class="d-flex align-items-center gap-3 mt-3">
+                        <button class="btn btn-analyze" id="analyze-btn" onclick="analyzeAlert()">
+                            <i class="bi bi-cpu-fill me-2"></i>Analyze with AI
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="clearInput()">
+                            <i class="bi bi-trash me-1"></i>Clear
+                        </button>
+                        <div class="ms-auto">
+                            <select class="form-select form-select-sm soc-select" id="sample-select" onchange="loadSample()">
+                                <option value="">Load Sample Alert...</option>
+                                <option value="ssh">SSH Brute Force</option>
+                                <option value="xss">Suricata XSS Alert</option>
+                                <option value="priv">Privilege Escalation (4672)</option>
+                                <option value="dns">DNS Beaconing</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="loading-panel" class="soc-card mb-4 d-none">
+                <div class="soc-card-body text-center py-5">
+                    <div class="soc-spinner mb-3"></div>
+                    <div class="text-cyan fw-bold">AI Analysis in Progress...</div>
+                    <div class="text-muted small mt-1">Claude is triaging your alert</div>
+                    <div class="loading-steps mt-3" id="loading-steps">
+                        <div class="loading-step active" id="step-1"><i class="bi bi-arrow-right-circle me-2"></i>Parsing alert data...</div>
+                        <div class="loading-step" id="step-2"><i class="bi bi-arrow-right-circle me-2"></i>Identifying threat patterns...</div>
+                        <div class="loading-step" id="step-3"><i class="bi bi-arrow-right-circle me-2"></i>Mapping MITRE ATT&CK techniques...</div>
+                        <div class="loading-step" id="step-4"><i class="bi bi-arrow-right-circle me-2"></i>Generating incident report...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div id="results-panel" class="d-none">
+
+                <!-- Classification Banner -->
+                <div class="classification-banner mb-4" id="classification-banner">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="classification-icon" id="class-icon"></div>
+                            <div>
+                                <div class="classification-label" id="class-label"></div>
+                                <div class="classification-sub">AI Confidence: <span id="class-confidence" class="fw-bold"></span>%</div>
+                            </div>
+                        </div>
+                        <div class="severity-badge" id="severity-badge"></div>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="soc-card mb-3">
+                    <div class="soc-card-header">
+                        <i class="bi bi-file-text-fill text-cyan me-2"></i>Threat Summary
+                    </div>
+                    <div class="soc-card-body">
+                        <p class="mb-0" id="result-summary"></p>
+                    </div>
+                </div>
+
+                <!-- MITRE Techniques -->
+                <div class="soc-card mb-3">
+                    <div class="soc-card-header">
+                        <i class="bi bi-diagram-3-fill text-cyan me-2"></i>MITRE ATT&CK Techniques
+                    </div>
+                    <div class="soc-card-body">
+                        <div id="mitre-tags"></div>
+                    </div>
+                </div>
+
+                <!-- Containment Steps -->
+                <div class="soc-card mb-3">
+                    <div class="soc-card-header">
+                        <i class="bi bi-shield-check-fill text-green me-2"></i>Containment Steps
+                    </div>
+                    <div class="soc-card-body">
+                        <ol class="containment-list" id="containment-list"></ol>
+                    </div>
+                </div>
+
+                <!-- Incident Report -->
+                <div class="soc-card mb-3">
+                    <div class="soc-card-header d-flex align-items-center">
+                        <i class="bi bi-journal-text text-cyan me-2"></i>Incident Report
+                        <button class="btn btn-outline-cyan btn-sm ms-auto" onclick="exportReport()" id="export-btn">
+                            <i class="bi bi-download me-1"></i>Export .txt
+                        </button>
+                        <a class="btn btn-outline-secondary btn-sm ms-2" id="full-report-link" href="#" target="_blank">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Full Page
+                        </a>
+                    </div>
+                    <div class="soc-card-body">
+                        <pre class="incident-report-text" id="incident-report"></pre>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Error Panel -->
+            <div id="error-panel" class="d-none">
+                <div class="soc-card error-card">
+                    <div class="soc-card-body d-flex align-items-center gap-3">
+                        <i class="bi bi-exclamation-circle-fill text-red fs-4"></i>
+                        <div>
+                            <div class="fw-bold text-red">Analysis Failed</div>
+                            <div class="text-muted small" id="error-message"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right: Sidebar -->
+        <div class="col-lg-5">
+
+            <!-- Severity Breakdown -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-bar-chart-fill text-cyan me-2"></i>Severity Breakdown
+                </div>
+                <div class="soc-card-body">
+                    <div class="severity-bar-item mb-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small text-red">Critical</span>
+                            <span class="small text-muted" id="sev-critical-count">{{ stats.severity_breakdown.Critical }}</span>
+                        </div>
+                        <div class="progress soc-progress">
+                            <div class="progress-bar bg-red" id="sev-critical-bar"
+                                style="width: {% if stats.total > 0 %}{{ (stats.severity_breakdown.Critical / stats.total * 100)|int }}{% else %}0{% endif %}%"></div>
+                        </div>
+                    </div>
+                    <div class="severity-bar-item mb-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small text-orange">High</span>
+                            <span class="small text-muted" id="sev-high-count">{{ stats.severity_breakdown.High }}</span>
+                        </div>
+                        <div class="progress soc-progress">
+                            <div class="progress-bar bg-orange" id="sev-high-bar"
+                                style="width: {% if stats.total > 0 %}{{ (stats.severity_breakdown.High / stats.total * 100)|int }}{% else %}0{% endif %}%"></div>
+                        </div>
+                    </div>
+                    <div class="severity-bar-item mb-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small text-yellow">Medium</span>
+                            <span class="small text-muted" id="sev-medium-count">{{ stats.severity_breakdown.Medium }}</span>
+                        </div>
+                        <div class="progress soc-progress">
+                            <div class="progress-bar bg-yellow" id="sev-medium-bar"
+                                style="width: {% if stats.total > 0 %}{{ (stats.severity_breakdown.Medium / stats.total * 100)|int }}{% else %}0{% endif %}%"></div>
+                        </div>
+                    </div>
+                    <div class="severity-bar-item">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small text-green">Low</span>
+                            <span class="small text-muted" id="sev-low-count">{{ stats.severity_breakdown.Low }}</span>
+                        </div>
+                        <div class="progress soc-progress">
+                            <div class="progress-bar bg-green" id="sev-low-bar"
+                                style="width: {% if stats.total > 0 %}{{ (stats.severity_breakdown.Low / stats.total * 100)|int }}{% else %}0{% endif %}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top MITRE Techniques -->
+            <div class="soc-card mb-4">
+                <div class="soc-card-header">
+                    <i class="bi bi-trophy-fill text-cyan me-2"></i>Top MITRE Techniques
+                </div>
+                <div class="soc-card-body">
+                    {% if stats.top_mitre_techniques %}
+                        {% for t in stats.top_mitre_techniques %}
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="mitre-tag small">{{ t.technique }}</span>
+                            <span class="badge bg-secondary">{{ t.count }}</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-muted small text-center py-2">No data yet. Analyze alerts to populate.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Alert History -->
+            <div class="soc-card">
+                <div class="soc-card-header">
+                    <i class="bi bi-clock-history text-cyan me-2"></i>Alert History
+                    <span class="ms-auto badge bg-secondary">{{ alerts|length }}</span>
+                </div>
+                <div class="soc-card-body p-0">
+                    {% if alerts %}
+                    <div class="alert-history-list">
+                        {% for alert in alerts %}
+                        <a href="/report/{{ alert.id }}" class="alert-history-item">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="flex-grow-1 me-2 overflow-hidden">
+                                    <div class="alert-history-text">{{ alert.alert_text[:80] }}{% if alert.alert_text|length > 80 %}...{% endif %}</div>
+                                    <div class="alert-history-meta">
+                                        <span class="{% if alert.classification == 'True Positive' %}text-green{% else %}text-red{% endif %}">
+                                            {{ alert.classification or 'Unknown' }}
+                                        </span>
+                                        <span class="mx-1 text-muted">·</span>
+                                        <span class="text-muted">{{ alert.created_at }}</span>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-column align-items-end gap-1">
+                                    <span class="severity-pill severity-{{ (alert.severity or 'low')|lower }}">{{ alert.severity or 'N/A' }}</span>
+                                </div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-muted small text-center py-4">
+                        <i class="bi bi-inbox fs-4 d-block mb-2"></i>No alerts analyzed yet.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="soc-footer mt-5">
+    <div class="container-fluid px-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small"><i class="bi bi-shield-shaded me-1 text-cyan"></i>AI SOC Analyst — For authorized and educational use only.</span>
+            <span class="text-muted small">Built by <a href="https://github.com/dhruvshah-cyber" class="text-cyan text-decoration-none">Dhruv Shah</a></span>
+        </div>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

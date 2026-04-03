@@ -1,21 +1,36 @@
-# Environment & secrets
+# Environment & secrets — NEVER commit real API keys
 .env
+
+# Database (local only)
+*.db
+*.sqlite
+*.sqlite3
 
 # Python
 .venv/
+venv/
+env/
+ENV/
 __pycache__/
+*.py[cod]
 *.pyc
 *.pyo
-
-# Database (local only)
-secureflow.db
+*.pyd
+pip-log.txt
 
 # Node
 frontend/node_modules/
 frontend/dist/
+dist/
+build/
+*.egg-info/
 
-# VSCode
+# IDEs
 .vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
 
 # Claude memory
 .claude/
